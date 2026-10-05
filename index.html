@@ -223,6 +223,7 @@ h2.title{font-family:'Space Grotesk';font-weight:700;font-size:2.1rem;line-heigh
 .video-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;max-width:860px;margin:0 auto}
 .video-frame{position:relative;aspect-ratio:16/9;border-radius:16px;overflow:hidden;border:1px solid var(--border-lit);background:#04070d}
 .video-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.video-frame.vertical{aspect-ratio:9/16;width:100%;max-width:340px;margin:0 auto;border-radius:22px}
 .video-ph{display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);font-size:.9rem;background:radial-gradient(500px 220px at 50% 0%,rgba(43,157,255,.12),transparent 70%),#04070d}
 .video-ph b{display:block;font-family:'Space Grotesk';font-size:1.05rem;color:var(--text);margin:6px 0 4px}
 
@@ -331,7 +332,7 @@ h2.title{font-family:'Space Grotesk';font-weight:700;font-size:2.1rem;line-heigh
   </div>
   <div style="margin-top:44px">
     <div style="text-align:center;font-family:'Space Grotesk';font-weight:600;color:var(--gold);margin-bottom:8px;font-size:.78rem;letter-spacing:2px;text-transform:uppercase">Video de muestra</div>
-    <p style="text-align:center;color:var(--muted);font-size:.92rem;margin-bottom:24px;max-width:60ch;margin-left:auto;margin-right:auto">Así se verá el contenido en movimiento: videos pensados para educar, conectar y generar confianza. 🎬</p>
+    <p style="text-align:center;color:var(--muted);font-size:.92rem;margin-bottom:24px;max-width:60ch;margin-left:auto;margin-right:auto">Así se verá el contenido en movimiento: reels pensados para educar, conectar y generar confianza. 🎬</p>
     <div id="videoSlot" class="video-grid"></div>
   </div>
 </div></section>
@@ -532,21 +533,34 @@ h2.title{font-family:'Space Grotesk';font-weight:700;font-size:2.1rem;line-heigh
 const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('on')})},{threshold:.12});
 document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 
-// ---- Videos de muestra: pega aquí los enlaces de embed cuando estén listos ----
-// Ejemplo: 'https://player.vimeo.com/video/1234567890'
+// ---- Videos de muestra ----
+// Cada video: { url: enlace de embed (con ?h=… si el video está oculto en Vimeo), vertical: true si es reel }
 (function(){
-  var VIDEOS = [];
+  var VIDEOS = [
+    { url:'https://player.vimeo.com/video/1233164597?h=7c958a2e74&title=0&byline=0&portrait=0&badge=0&dnt=1&loop=1&playsinline=1', vertical:true }
+  ];
   var box = document.getElementById('videoSlot');
   if(!box) return;
   var okUrl = /^https:\/\/(player\.vimeo\.com\/video\/|www\.youtube\.com\/embed\/|www\.youtube-nocookie\.com\/embed\/)/;
-  var validos = VIDEOS.filter(function(u){ return okUrl.test(u); });
-  if(!validos.length){
+  var lista = VIDEOS.map(function(v){ return typeof v==='string' ? {url:v, vertical:false} : v; })
+                    .filter(function(v){ return v && okUrl.test(v.url); });
+  if(!lista.length){
     box.innerHTML = '<div class="video-frame video-ph"><div><div style="font-size:2rem">🎬</div><b>Tu video de muestra</b>Lo estamos produciendo para Vital 360. Pronto lo verás aquí.</div></div>';
     return;
   }
-  box.innerHTML = validos.map(function(u){
-    return '<div class="video-frame"><iframe src="'+u+'" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy" title="Video de muestra"></iframe></div>';
-  }).join('');
+  box.innerHTML = '';
+  lista.forEach(function(v){
+    var wrap = document.createElement('div');
+    wrap.className = 'video-frame' + (v.vertical ? ' vertical' : '');
+    var f = document.createElement('iframe');
+    f.src = v.url;
+    f.setAttribute('allow','autoplay; fullscreen; picture-in-picture');
+    f.setAttribute('allowfullscreen','');
+    f.setAttribute('loading','lazy');
+    f.setAttribute('title','Video de muestra');
+    wrap.appendChild(f);
+    box.appendChild(wrap);
+  });
 })();
 
 // ---- Calculadora ----
