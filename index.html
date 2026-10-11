@@ -458,7 +458,7 @@ h2.title{font-family:'Space Grotesk';font-weight:700;font-size:2.1rem;line-heigh
         <span>Con <b>pago anual</b> obtienes un <b>15% de descuento</b>.</span>
       </div>
       <ul class="ro-list" id="breakdown"></ul>
-      <button type="button" class="ro-cta ro-team" id="tpOpen" aria-expanded="false" aria-controls="equipo-panel"><span>🔱</span> Equipo Poseidón · Generar proforma</button>
+      <button type="button" class="ro-cta ro-team" id="tpOpen" aria-expanded="false" aria-controls="equipo-panel"><span>🔱</span> Equipo Poseidón · Gestionar cliente</button>
       <p class="ro-note">Valores mensuales referenciales, no incluyen IVA. El plan se ajusta a lo que Vital 360 decida contratar. La publicidad pagada (pauta de Meta) es un monto aparte: va directo a Meta, no a Poseidón, y se define según tus metas.</p>
     </div>
   </div>
@@ -471,8 +471,8 @@ h2.title{font-family:'Space Grotesk';font-weight:700;font-size:2.1rem;line-heigh
       <button type="button" class="tp-close" id="tpClose">Cerrar ✕</button>
       <div class="tp-head">
         <span class="tp-badge">Panel interno · solo equipo Poseidón</span>
-        <h3>Generar y enviar proforma</h3>
-        <p>Toma la selección actual de la calculadora y emite la proforma al destinatario al instante.</p>
+        <h3>Gestión del cliente</h3>
+        <p>Orden: ① enviar propuesta · ② generar proforma (después de la reunión) · ③ enviar contrato (cuando haya acuerdo).</p>
       </div>
       <div class="tp-summary" id="tpSummary"></div>
       <div class="tp-grid">
@@ -497,8 +497,11 @@ h2.title{font-family:'Space Grotesk';font-weight:700;font-size:2.1rem;line-heigh
             <option value="Anual">Anual (−15%)</option>
           </select>
         </label>
-        <label class="tp-full">Nota
-          <textarea id="tpNota" rows="2"></textarea>
+        <label class="tp-full">Nota automática (incluye el código del caso; no se edita)
+          <textarea id="tpNota" rows="2" readonly style="opacity:.75;cursor:not-allowed"></textarea>
+        </label>
+        <label class="tp-full">Nota adicional (opcional)
+          <textarea id="tpNotaExtra" rows="2" maxlength="200" placeholder="Se agrega al final de la nota de la proforma"></textarea>
         </label>
         <label>Clave de equipo
           <input id="tpClave" type="password" autocomplete="new-password" placeholder="••••••••">
@@ -537,7 +540,7 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 // Cada video: { url: enlace de embed (con ?h=… si el video está oculto en Vimeo), vertical: true si es reel }
 (function(){
   var VIDEOS = [
-    { url:'https://player.vimeo.com/video/1233164597?h=7c958a2e74&title=0&byline=0&portrait=0&badge=0&dnt=1&loop=1&playsinline=1', vertical:true }
+    { url:'https://player.vimeo.com/video/1233164597?h=7c958a2e74&title=0&byline=0&portrait=0&badge=0&dnt=1&playsinline=1', vertical:true }
   ];
   var box = document.getElementById('videoSlot');
   if(!box) return;
@@ -561,6 +564,33 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
     wrap.appendChild(f);
     box.appendChild(wrap);
   });
+
+  // Evita la pantalla final de Vimeo ("ver más de…" y videos sugeridos):
+  // se detiene el video justo antes de terminar y se regresa al inicio.
+  function protegerFinal(iframe){
+    var p = new window.Vimeo.Player(iframe);
+    var ocupado = false;
+    p.on('timeupdate', function(d){
+      if(ocupado || !d || !d.duration) return;
+      if((d.duration - d.seconds) <= 0.7){
+        ocupado = true;
+        p.pause().then(function(){ return p.setCurrentTime(0); }).catch(function(){}).then(function(){ ocupado = false; });
+      }
+    });
+    p.on('ended', function(){ p.setCurrentTime(0).catch(function(){}); p.pause().catch(function(){}); });
+  }
+  function iniciar(){
+    box.querySelectorAll('iframe').forEach(function(f){
+      if(/^https:\/\/player\.vimeo\.com\//.test(f.src)){ try{ protegerFinal(f); }catch(e){} }
+    });
+  }
+  if(window.Vimeo && window.Vimeo.Player){ iniciar(); }
+  else {
+    var s = document.createElement('script');
+    s.src = 'https://player.vimeo.com/api/player.js';
+    s.onload = iniciar;
+    document.head.appendChild(s);
+  }
 })();
 
 // ---- Calculadora ----
@@ -723,7 +753,7 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
     elTotal.innerHTML = money(data.neto)+' <span>+ IVA / '+(elPago.value==='Anual'?'año':'mes')+'</span>';
 
     var auto = PANEL_CONFIG.notaBase + ' · Plan: ' + (data.cortos.length? data.cortos.join(', ') : '—') + ' · Pago ' + elPago.value.toLowerCase();
-    if(elNota.value==='' || elNota.value===lastAutoNota){ elNota.value = auto; }
+    elNota.value = auto;
     lastAutoNota = auto;
 
     mark(elTel, vTel(elTel.value.trim()));
@@ -775,7 +805,7 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
       cliente_ruc: elRuc.value.trim(),
       cliente_email: elEmail.value.trim(),
       servicios: data.servicios,
-      notas: elNota.value.trim(),
+      notas: (elNota.value.trim() + (document.getElementById('tpNotaExtra') && document.getElementById('tpNotaExtra').value.trim() ? ' · ' + document.getElementById('tpNotaExtra').value.replace(/[\r\n]+/g,' ').trim().slice(0,200) : '')),
       dias_vigencia: PANEL_CONFIG.diasVigencia,
       telefonos_adicionales: elAdic.value.trim()
     };
@@ -827,5 +857,240 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
   refresh();
 })();
 </script>
+<!-- ============================================================
+     BLOQUE "1 · ENVIAR PROPUESTA" · se pega UNA vez, justo antes de </body>, en TODA propuesta que tenga el panel de equipo.
+     Se coloca solo en la PARTE DE ARRIBA del panel interno (#equipo-panel), antes de la proforma, y rotula el paso 2 (proforma).
+     Qué hace: manda el link de ESTA propuesta al WhatsApp del cliente (el del requerimiento, o el que indiques abajo)
+     y deja el caso en "propuesta_enviada". La clave se teclea y se borra tras cada intento.
+     REGLA FIJA: la única línea que cambia por cliente es  codigo  (la misma de PANEL_CONFIG.codigo).
+     ============================================================ -->
+<script>
+(function(){
+  var ENVIAR_PROPUESTA = {
+    codigo:  'CAM-002',                                        // = PANEL_CONFIG.codigo (REQ-/CAM- del requerimiento de ESTE cliente)
+    webhook: 'https://mkposeidon.com/webhook/contrato'         // NO se cambia
+  };
+
+  var panel = document.getElementById('equipo-panel');
+  var caja  = panel && panel.querySelector('.tp-box');
+  if(!caja || document.getElementById('epBtn')) return;
+
+  var linkPropuesta = location.origin + location.pathname;      // el link que recibe el cliente = esta misma página
+
+  var bloque = document.createElement('div');
+  bloque.id = 'epBloque';
+  bloque.style.cssText = 'margin:0 0 26px;padding-bottom:22px;border-bottom:1px solid rgba(255,255,255,.12)';
+  bloque.innerHTML =
+    '<div style="font-family:\'Space Grotesk\';font-weight:700;font-size:1.15rem;margin:0 0 6px">① Enviar propuesta</div>' +
+    '<p style="margin:0 0 14px;font-size:.86rem;opacity:.8">Manda por WhatsApp el link de esta propuesta (<b>' + ENVIAR_PROPUESTA.codigo + '</b>) al número del requerimiento y deja el caso en <b>Propuesta enviada</b>. No necesitas llenar los campos de la proforma.</p>' +
+    '<div class="tp-grid">' +
+      '<label>Clave de equipo<input id="epClave" type="password" autocomplete="new-password" placeholder="••••••••"></label>' +
+      '<label>Enviar a otro número (opcional)<input id="epTel" type="tel" inputmode="numeric" maxlength="13" autocomplete="off" placeholder="Vacío = el del requerimiento"></label>' +
+      '<label>Nombre de quien recibe (opcional)<input id="epNom" type="text" maxlength="40" autocomplete="off" placeholder="Ej.: Jorge"></label>' +
+    '</div>' +
+    '<div class="tp-actions"><button type="button" id="epBtn" class="tp-btn" disabled>Enviar propuesta</button></div>' +
+    '<div class="tp-status" id="epStatus" role="status" aria-live="polite"></div>';
+
+  var cabeza = caja.querySelector('.tp-head');
+  if(cabeza && cabeza.nextSibling){ caja.insertBefore(bloque, cabeza.nextSibling); } else { caja.appendChild(bloque); }
+
+  // Rótulo del paso 2 (la proforma ya existente queda debajo)
+  var resumen = document.getElementById('tpSummary');
+  if(resumen && !document.getElementById('epPaso2')){
+    var p2 = document.createElement('div');
+    p2.id = 'epPaso2';
+    p2.innerHTML = '<div style="font-family:\'Space Grotesk\';font-weight:700;font-size:1.15rem;margin:0 0 6px">② Generar proforma</div>' +
+      '<p style="margin:0 0 14px;font-size:.86rem;opacity:.8">Después de la reunión, cuando ya sabes qué quiere el cliente. Aquí se llenan los datos de quien recibe la proforma; quedan guardados para el contrato.</p>';
+    resumen.parentNode.insertBefore(p2, resumen);
+  }
+
+  var elClave = document.getElementById('epClave'),
+      elTel   = document.getElementById('epTel'),
+      elNom   = document.getElementById('epNom'),
+      elBtn   = document.getElementById('epBtn'),
+      elSt    = document.getElementById('epStatus'),
+      enviando = false;
+
+  function telOk(v){ v = String(v||'').replace(/\D/g,''); return v === '' || /^0[89]\d{8}$/.test(v) || /^593[89]\d{8}$/.test(v); }
+  function validar(){
+    var okTel = telOk(elTel.value);
+    elTel.classList.toggle('bad', !okTel);
+    elBtn.disabled = enviando || !elClave.value.trim() || !okTel;
+  }
+  elClave.addEventListener('input', validar);
+  elTel.addEventListener('input', validar);
+  panel.addEventListener('click', function(e){ if(e.target && e.target.id === 'tpClose') elClave.value = ''; });
+
+  function pedir(reenviar, clave){
+    var cuerpo = { accion:'enviar_propuesta', clave:clave, caso:ENVIAR_PROPUESTA.codigo, propuesta_url:linkPropuesta, reenviar: !!reenviar };
+    if(elTel.value.trim()) cuerpo.telefono_destino = elTel.value.trim();
+    if(elNom.value.trim()) cuerpo.nombre_destino = elNom.value.trim();
+    return fetch(ENVIAR_PROPUESTA.webhook, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo) })
+      .then(function(r){ return r.json(); });
+  }
+
+  elBtn.addEventListener('click', function(){
+    if(enviando || elBtn.disabled) return;
+    if(linkPropuesta.indexOf('https://poseidonmk.github.io/') !== 0){
+      elSt.className = 'tp-status err';
+      elSt.textContent = '✕ Esta página no está publicada en poseidonmk.github.io; ábrela desde su link real para enviarla.';
+      return;
+    }
+    var aOtro = elTel.value.trim() ? ' al número ' + elTel.value.trim() : ' al WhatsApp del requerimiento';
+    if(!confirm('¿Enviar la propuesta ' + ENVIAR_PROPUESTA.codigo + aOtro + '?')) return;
+
+    enviando = true; elBtn.disabled = true;
+    var clave = elClave.value;
+    function limpio(t){ t = String(t == null ? '' : t); return clave ? t.split(clave).join('••••') : t; }
+    function error(m){ elSt.className = 'tp-status err'; elSt.textContent = '✕ ' + limpio(m); }
+    elSt.className = 'tp-status load'; elSt.textContent = 'Enviando propuesta…';
+
+    pedir(false, clave).then(function(body){
+      if(body && body.ok === false && body.error === 'YA_ENVIADA'){
+        if(confirm(limpio(body.mensaje) + '\n\n¿Reenviarla de todos modos?')){
+          elSt.textContent = 'Reenviando propuesta…';
+          return pedir(true, clave);
+        }
+        elSt.className = 'tp-status'; elSt.textContent = 'No se reenvió.';
+        return null;
+      }
+      return body;
+    }).then(function(body){
+      if(body === null) return;
+      if(body && body.ok === true){
+        elSt.className = 'tp-status ok';
+        elSt.textContent = '✓ Propuesta ' + (body.reenvio ? 'reenviada' : 'enviada') + ' al WhatsApp ' + limpio(body.enviado_a) + ' · caso ' + limpio(body.caso) + ' en "' + limpio(body.ahora) + '". Equipo avisado: ' + (body.equipo_avisado || 0) + (body.equipo_sin_aviso ? ' (' + body.equipo_sin_aviso + ' sin aviso, revisa)' : '') + '.';
+      } else {
+        error((body && (body.mensaje || body.message)) || 'No se pudo enviar la propuesta.');
+      }
+    }).catch(function(){
+      error('No se pudo leer la respuesta del servidor o no hay conexión. Revisa tu internet e intenta de nuevo (no se repite solo).');
+    }).finally(function(){
+      elClave.value = ''; enviando = false; validar();
+    });
+  });
+})();
+</script>
+
+<!-- ============================================================
+     BLOQUE "③ ENVIAR CONTRATO" · se pega UNA vez, justo antes de </body>, DESPUÉS del bloque "Enviar propuesta".
+     Se coloca al FINAL del panel interno (#equipo-panel), debajo de la proforma. No toca nada más.
+     Qué hace: crea el contrato del caso (mismo código REQ-/CAM-) con los servicios y datos de la proforma ya guardada y lo manda
+     por WhatsApp para firma con código. Es INDEPENDIENTE de la proforma: se usa cuando ya hay acuerdo (días después).
+     Todos los campos son opcionales: vacío = se usan los datos de la proforma. La clave se teclea y se borra tras cada intento.
+     Única línea que cambia por cliente: codigo.
+     ============================================================ -->
+<script>
+(function(){
+  var ENVIAR_CONTRATO = {
+    codigo:  'CAM-002',                                        // = PANEL_CONFIG.codigo (REQ-/CAM- de ESTE cliente)
+    webhook: 'https://mkposeidon.com/webhook/contrato'         // NO se cambia
+  };
+
+  var panel = document.getElementById('equipo-panel');
+  var caja  = panel && panel.querySelector('.tp-box');
+  if(!caja || document.getElementById('ecBtn')) return;
+
+  var bloque = document.createElement('div');
+  bloque.id = 'ecBloque';
+  bloque.style.cssText = 'margin-top:28px;padding-top:22px;border-top:1px solid rgba(255,255,255,.12)';
+  bloque.innerHTML =
+    '<div style="font-family:\'Space Grotesk\';font-weight:700;font-size:1.15rem;margin:0 0 6px">③ Enviar contrato</div>' +
+    '<p style="margin:0 0 14px;font-size:.86rem;opacity:.8">Cuando ya hay acuerdo. Crea el contrato de <b>' + ENVIAR_CONTRATO.codigo + '</b> con los servicios y datos de su proforma y lo manda por WhatsApp para firma con código. La proforma debe estar generada antes. <b>Todo lo opcional se deja vacío si no cambia nada.</b></p>' +
+    '<div class="tp-grid">' +
+      '<label>Clave de equipo<input id="ecClave" type="password" autocomplete="new-password" placeholder="••••••••"></label>' +
+      '<label>WhatsApp de quien firma (opcional)<input id="ecTel" type="tel" inputmode="numeric" maxlength="13" autocomplete="off" placeholder="Vacío = el de la proforma"></label>' +
+      '<label>Nombre en el mensaje de WhatsApp (opcional)<input id="ecNom" type="text" maxlength="40" autocomplete="off" placeholder="Ej.: Jorge (sale en “Hola Jorge”)"></label>' +
+    '</div>' +
+    '<p style="margin:16px 0 8px;font-size:.82rem;opacity:.8">Datos de quien firma — opcionales. Si los llenas, el contrato sale con ellos; quien firma podrá confirmarlos o corregirlos al abrir el link.</p>' +
+    '<div class="tp-grid">' +
+      '<label>Nombre o razón social<input id="ecRazon" type="text" maxlength="120" autocomplete="off" placeholder="Vacío = el de la proforma"></label>' +
+      '<label>Cédula o RUC<input id="ecRuc" type="text" inputmode="numeric" maxlength="13" autocomplete="off" placeholder="10 o 13 dígitos"></label>' +
+      '<label class="tp-full">Domicilio<input id="ecDom" type="text" maxlength="200" autocomplete="off" placeholder="Dirección completa"></label>' +
+      '<label class="tp-full">Correo<input id="ecMail" type="email" maxlength="120" autocomplete="off" placeholder="correo@ejemplo.com"></label>' +
+    '</div>' +
+    '<label style="display:flex;gap:8px;align-items:center;margin:12px 0;font-size:13px"><input type="checkbox" id="ecRee"> Reemplazar el contrato en curso (anula el anterior y envía uno nuevo)</label>' +
+    '<div class="tp-actions"><button type="button" id="ecBtn" class="tp-btn" disabled>Enviar contrato</button>' +
+      '<button type="button" id="ecReBtn" class="tp-btn" disabled style="background:transparent;border:1px solid currentColor;color:inherit" title="Si el cliente dice que no le llegó: manda un link nuevo del contrato que ya existe (el link anterior deja de funcionar). No crea otro contrato.">Reenviar link del contrato en curso</button></div>' +
+    '<div class="tp-status" id="ecStatus" role="status" aria-live="polite"></div>';
+  caja.appendChild(bloque);
+
+  var $ = function(i){ return document.getElementById(i); };
+  var elClave=$('ecClave'), elTel=$('ecTel'), elNom=$('ecNom'), elRazon=$('ecRazon'), elRuc=$('ecRuc'),
+      elDom=$('ecDom'), elMail=$('ecMail'), elRee=$('ecRee'), elBtn=$('ecBtn'), elReBtn=$('ecReBtn'), elSt=$('ecStatus'), enviando=false;
+
+  function telOk(v){ v = String(v||'').replace(/\D/g,''); return v === '' || /^0[89]\d{8}$/.test(v) || /^593[89]\d{8}$/.test(v); }
+  function rucOk(v){ v = String(v||'').replace(/\D/g,''); return String(v||'') === '' || /^\d{10}(\d{3})?$/.test(v); }
+  function mailOk(v){ v = String(v||'').trim(); return v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
+  function domOk(v){ v = String(v||'').trim(); return v === '' || v.length >= 8; }
+  function validar(){
+    var oks = [telOk(elTel.value), rucOk(elRuc.value), mailOk(elMail.value), domOk(elDom.value)];
+    elTel.classList.toggle('bad', !oks[0]); elRuc.classList.toggle('bad', !oks[1]);
+    elMail.classList.toggle('bad', !oks[2]); elDom.classList.toggle('bad', !oks[3]);
+    elBtn.disabled = enviando || !elClave.value.trim() || oks.indexOf(false) !== -1;
+    elReBtn.disabled = enviando || !elClave.value.trim() || !oks[0];
+  }
+  [elClave, elTel, elRuc, elMail, elDom].forEach(function(e){ e.addEventListener('input', validar); });
+  panel.addEventListener('click', function(e){ if(e.target && e.target.id === 'tpClose') elClave.value = ''; });
+
+  elReBtn.addEventListener('click', function(){
+    if(enviando || elReBtn.disabled) return;
+    if(!confirm('¿Reenviar un link NUEVO del contrato en curso de ' + ENVIAR_CONTRATO.codigo + '? El link anterior dejará de funcionar. No se crea otro contrato.')) return;
+    enviando = true; elBtn.disabled = true; elReBtn.disabled = true;
+    var clave = elClave.value;
+    function limpio(t){ t = String(t == null ? '' : t); return clave ? t.split(clave).join('••••') : t; }
+    elSt.className = 'tp-status load'; elSt.textContent = 'Reenviando link…';
+    var cuerpo = { accion:'reenviar', clave:clave, caso:ENVIAR_CONTRATO.codigo };
+    if(elNom.value.trim()) cuerpo.nombre_saludo = elNom.value.trim();
+    fetch(ENVIAR_CONTRATO.webhook, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo) })
+      .then(function(r){ return r.json(); })
+      .then(function(body){
+        if(body && body.ok === true){ elSt.className = 'tp-status ok'; elSt.textContent = '✓ Link nuevo del contrato ' + limpio(body.contrato) + ' enviado al WhatsApp ' + limpio(body.enviado_a) + '. El link anterior ya no funciona.'; }
+        else { elSt.className = 'tp-status err'; elSt.textContent = '✕ ' + limpio((body && (body.mensaje || body.message)) || 'No se pudo reenviar el link.'); }
+      })
+      .catch(function(){ elSt.className = 'tp-status err'; elSt.textContent = '✕ No se pudo leer la respuesta del servidor o no hay conexión. Revisa antes de reintentar.'; })
+      .finally(function(){ elClave.value = ''; enviando = false; validar(); });
+  });
+
+  elBtn.addEventListener('click', function(){
+    if(enviando || elBtn.disabled) return;
+    var reemplazar = elRee.checked;
+    var aQuien = elTel.value.trim() ? 'al número ' + elTel.value.trim() : 'al WhatsApp registrado en su proforma';
+    if(!confirm('¿Enviar el CONTRATO de ' + ENVIAR_CONTRATO.codigo + ' ' + aQuien + (reemplazar ? ' (reemplazando el que está en curso)' : '') + '?')) return;
+
+    enviando = true; elBtn.disabled = true;
+    var clave = elClave.value;
+    function limpio(t){ t = String(t == null ? '' : t); return clave ? t.split(clave).join('••••') : t; }
+    function error(m){ elSt.className = 'tp-status err'; elSt.textContent = '✕ ' + limpio(m); }
+    elSt.className = 'tp-status load'; elSt.textContent = 'Creando y enviando el contrato…';
+
+    var cuerpo = { accion:'crear', clave:clave, caso:ENVIAR_CONTRATO.codigo, reemplazar:reemplazar };
+    if(elTel.value.trim()) cuerpo.telefono_firma = elTel.value.trim();
+    if(elNom.value.trim()) cuerpo.nombre_saludo = elNom.value.trim();
+    var dc = {};
+    if(elRazon.value.trim()) dc.razon_social = elRazon.value.trim();
+    if(elRuc.value.trim())   dc.ruc = elRuc.value.replace(/\D/g,'');
+    if(elDom.value.trim())   dc.domicilio = elDom.value.trim();
+    if(elMail.value.trim())  dc.correo = elMail.value.trim();
+    if(Object.keys(dc).length) cuerpo.datos_cliente = dc;
+
+    fetch(ENVIAR_CONTRATO.webhook, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo) })
+      .then(function(r){ return r.json(); })
+      .then(function(body){
+        if(body && body.ok === true){
+          elSt.className = 'tp-status ok';
+          elSt.textContent = '✓ Contrato ' + limpio(body.contrato) + ' enviado al WhatsApp ' + limpio(body.enviado_a) + '. Quien firma lo hace con un código; recibirás la copia firmada.';
+        } else if(body && body.error === 'YA_EXISTE'){
+          error((body.mensaje || 'Ya hay un contrato en curso.') + ' Marca "Reemplazar" si quieres enviar otro.');
+        } else {
+          error((body && (body.mensaje || body.message)) || 'No se pudo enviar el contrato.');
+        }
+      })
+      .catch(function(){ error('No se pudo leer la respuesta del servidor o no hay conexión. Revisa el caso antes de reintentar (no se repite solo).'); })
+      .finally(function(){ elClave.value = ''; enviando = false; validar(); });
+  });
+})();
+</script>
+
 </body>
 </html>
