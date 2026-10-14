@@ -977,6 +977,7 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
      Se coloca al FINAL del panel interno (#equipo-panel), debajo de la proforma. No toca nada más.
      Qué hace: crea el contrato del caso (mismo código REQ-/CAM-) con los servicios y datos de la proforma ya guardada y lo manda
      por WhatsApp para firma con código. Es INDEPENDIENTE de la proforma: se usa cuando ya hay acuerdo (días después).
+     NUEVO: campo "Notas de negociación" (salen en el Anexo 1 del contrato) y botón "Ver borrador (PDF)" que NO crea ni envía nada.
      Todos los campos son opcionales: vacío = se usan los datos de la proforma. La clave se teclea y se borra tras cada intento.
      Única línea que cambia por cliente: codigo.
      ============================================================ -->
@@ -1009,15 +1010,18 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
       '<label class="tp-full">Domicilio<input id="ecDom" type="text" maxlength="200" autocomplete="off" placeholder="Dirección completa"></label>' +
       '<label class="tp-full">Correo<input id="ecMail" type="email" maxlength="120" autocomplete="off" placeholder="correo@ejemplo.com"></label>' +
     '</div>' +
+    '<p style="margin:16px 0 8px;font-size:.82rem;opacity:.8"><b>Notas de negociación (Anexo 1)</b> — lo acordado fuera de la proforma. Una nota por línea. Salen en el contrato y quien firma las ve antes de firmar. Si lo dejas vacío, el Anexo 1 dice “Sin notas adicionales a la fecha de firma”. Al <b>reemplazar</b>: vacío = se conservan las notas del contrato anterior; si escribes, este texto pasa a ser el listado completo.</p>' +
+    '<div class="tp-grid"><label class="tp-full"><textarea id="ecNotas" rows="4" maxlength="3000" autocomplete="off" placeholder="Ej.:\nEntrega del ecosistema en 6 semanas por acuerdo.\nSoporte prioritario los primeros 30 días."></textarea></label></div>' +
     '<label style="display:flex;gap:8px;align-items:center;margin:12px 0;font-size:13px"><input type="checkbox" id="ecRee"> Reemplazar el contrato en curso (anula el anterior y envía uno nuevo)</label>' +
-    '<div class="tp-actions"><button type="button" id="ecBtn" class="tp-btn" disabled>Enviar contrato</button>' +
+    '<div class="tp-actions"><button type="button" id="ecBorBtn" class="tp-btn" disabled style="background:transparent;border:1px solid currentColor;color:inherit" title="Genera el contrato como PDF con marca de agua BORRADOR. No crea el contrato ni envía nada: sirve para revisarlo y acordar las notas con el cliente.">Ver borrador (PDF)</button>' +
+      '<button type="button" id="ecBtn" class="tp-btn" disabled>Enviar contrato</button>' +
       '<button type="button" id="ecReBtn" class="tp-btn" disabled style="background:transparent;border:1px solid currentColor;color:inherit" title="Si el cliente dice que no le llegó: manda un link nuevo del contrato que ya existe (el link anterior deja de funcionar). No crea otro contrato.">Reenviar link del contrato en curso</button></div>' +
     '<div class="tp-status" id="ecStatus" role="status" aria-live="polite"></div>';
   caja.appendChild(bloque);
 
   var $ = function(i){ return document.getElementById(i); };
   var elClave=$('ecClave'), elTel=$('ecTel'), elNom=$('ecNom'), elRazon=$('ecRazon'), elRuc=$('ecRuc'),
-      elDom=$('ecDom'), elMail=$('ecMail'), elRee=$('ecRee'), elBtn=$('ecBtn'), elReBtn=$('ecReBtn'), elSt=$('ecStatus'), enviando=false;
+      elDom=$('ecDom'), elMail=$('ecMail'), elNotas=$('ecNotas'), elBor=$('ecBorBtn'), elRee=$('ecRee'), elBtn=$('ecBtn'), elReBtn=$('ecReBtn'), elSt=$('ecStatus'), enviando=false;
 
   function telOk(v){ v = String(v||'').replace(/\D/g,''); return v === '' || /^0[89]\d{8}$/.test(v) || /^593[89]\d{8}$/.test(v); }
   function rucOk(v){ v = String(v||'').replace(/\D/g,''); return String(v||'') === '' || /^\d{10}(\d{3})?$/.test(v); }
@@ -1028,6 +1032,7 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
     elTel.classList.toggle('bad', !oks[0]); elRuc.classList.toggle('bad', !oks[1]);
     elMail.classList.toggle('bad', !oks[2]); elDom.classList.toggle('bad', !oks[3]);
     elBtn.disabled = enviando || !elClave.value.trim() || oks.indexOf(false) !== -1;
+    elBor.disabled = enviando || !elClave.value.trim() || oks.indexOf(false) !== -1;
     elReBtn.disabled = enviando || !elClave.value.trim() || !oks[0];
   }
   [elClave, elTel, elRuc, elMail, elDom].forEach(function(e){ e.addEventListener('input', validar); });
@@ -1052,11 +1057,47 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
       .finally(function(){ elClave.value = ''; enviando = false; validar(); });
   });
 
+  elBor.addEventListener('click', function(){
+    if(enviando || elBor.disabled) return;
+    // La pestaña se abre YA (con el clic) para que el navegador no la bloquee; luego se le pone el PDF.
+    var w = window.open('', '_blank');
+    enviando = true; validar();
+    var clave = elClave.value;
+    function limpio(t){ t = String(t == null ? '' : t); return clave ? t.split(clave).join('••••') : t; }
+    function error(m){ if(w) try{ w.close(); }catch(e){} elSt.className = 'tp-status err'; elSt.textContent = '✕ ' + limpio(m); }
+    elSt.className = 'tp-status load'; elSt.textContent = 'Generando el borrador…';
+    var cuerpo = { accion:'borrador', clave:clave, caso:ENVIAR_CONTRATO.codigo };
+    var dc = {};
+    if(elRazon.value.trim()) dc.razon_social = elRazon.value.trim();
+    if(elRuc.value.trim())   dc.ruc = elRuc.value.replace(/\D/g,'');
+    if(elDom.value.trim())   dc.domicilio = elDom.value.trim();
+    if(elMail.value.trim())  dc.correo = elMail.value.trim();
+    if(Object.keys(dc).length) cuerpo.datos_cliente = dc;
+    if(elNotas.value.trim()) cuerpo.notas_negociacion = elNotas.value.trim();
+    fetch(ENVIAR_CONTRATO.webhook, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo) })
+      .then(function(r){ return r.json(); })
+      .then(function(body){
+        if(!(body && body.ok === true)){ error((body && (body.mensaje || body.message)) || 'No se pudo generar el borrador.'); return; }
+        if(body.tipo === 'pdf' && body.url){
+          if(w){ w.location.href = body.url; } else { window.open(body.url, '_blank'); }
+          elSt.className = 'tp-status ok'; elSt.textContent = '✓ Borrador listo (PDF con marca BORRADOR). No se creó ni se envió ningún contrato. Descárgalo y compártelo tú con el cliente. El link dura 15 minutos.';
+        } else if(body.tipo === 'html' && body.html){
+          var url = URL.createObjectURL(new Blob([body.html], { type:'text/html;charset=utf-8' }));
+          if(w){ w.location.href = url; } else { window.open(url, '_blank'); }
+          elSt.className = 'tp-status ok'; elSt.textContent = '✓ Borrador abierto en otra pestaña. Guárdalo como PDF: Imprimir → Guardar como PDF. No se creó ni se envió ningún contrato.';
+        } else { error('El borrador llegó en un formato inesperado.'); }
+      })
+      .catch(function(){ error('No se pudo leer la respuesta del servidor o no hay conexión.'); })
+      .finally(function(){ elClave.value = ''; enviando = false; validar(); });
+  });
+
   elBtn.addEventListener('click', function(){
     if(enviando || elBtn.disabled) return;
     var reemplazar = elRee.checked;
     var aQuien = elTel.value.trim() ? 'al número ' + elTel.value.trim() : 'al WhatsApp registrado en su proforma';
-    if(!confirm('¿Enviar el CONTRATO de ' + ENVIAR_CONTRATO.codigo + ' ' + aQuien + (reemplazar ? ' (reemplazando el que está en curso)' : '') + '?')) return;
+    var nNotas = elNotas.value.split('\n').filter(function(l){ return l.trim(); }).length;
+    var txtNotas = nNotas ? ('Con ' + nNotas + ' nota(s) en el Anexo 1.') : (reemplazar ? 'Sin notas nuevas: se conservan las del contrato anterior, si las tenía.' : 'SIN notas: el Anexo 1 dirá “Sin notas adicionales”.');
+    if(!confirm('¿Enviar el CONTRATO de ' + ENVIAR_CONTRATO.codigo + ' ' + aQuien + (reemplazar ? ' (reemplazando el que está en curso)' : '') + '?\n\n' + txtNotas + '\n\nSi quieres revisarlo antes, cancela y usa “Ver borrador (PDF)”.')) return;
 
     enviando = true; elBtn.disabled = true;
     var clave = elClave.value;
@@ -1073,6 +1114,7 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
     if(elDom.value.trim())   dc.domicilio = elDom.value.trim();
     if(elMail.value.trim())  dc.correo = elMail.value.trim();
     if(Object.keys(dc).length) cuerpo.datos_cliente = dc;
+    if(elNotas.value.trim()) cuerpo.notas_negociacion = elNotas.value.trim();
 
     fetch(ENVIAR_CONTRATO.webhook, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo) })
       .then(function(r){ return r.json(); })
